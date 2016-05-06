@@ -2,17 +2,27 @@
  * Initial setup
  ****************************************************************************/
 
-var configuration = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]},
+var configuration = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
 // {"url":"stun:stun.services.mozilla.com"}
+//var server = 'https://127.0.0.1:8080/';
+var server = 'https://140.114.77.126:8080/';
+var serverIP = '140.114.77.126';
 
     roomURL = document.getElementById('url'),
     video = document.getElementsByTagName('video')[0],
+    remoteVideo = document.getElementById("remoteVideo"),
     photo = document.getElementById('photo'),
     photoContext = photo.getContext('2d'),
     trail = document.getElementById('trail'),
+
     snapBtn = document.getElementById('snap'),
     sendBtn = document.getElementById('send'),
     snapAndSendBtn = document.getElementById('snapAndSend'),
+    startButton = document.getElementById("startButton"),
+    callButton = document.getElementById("callButton"),
+    hangupButton = document.getElementById("hangupButton"),
+ 
+    localStream = null;
     // Default values for width and height of the photoContext.
     // Maybe redefined later based on user's webcam video stream.
     photoContextW = 300, photoContextH = 150;
@@ -22,6 +32,16 @@ video.addEventListener('play', setCanvasDimensions);
 snapBtn.addEventListener('click', snapPhoto);
 sendBtn.addEventListener('click', sendPhoto);
 snapAndSendBtn.addEventListener('click', snapAndSend);
+startButton.onclick = start;
+callButton.onclick = call;
+hangupButton.onclick = hangup;
+
+startButton.disabled = false;
+callButton.disabled = true;
+hangupButton.disabled = true;
+snapBtn.disabled = true;
+sendBtn.disabled = true;
+snapAndSendBtn.disabled = true;
 
 // Create a random room if not already present in the URL.
 var isInitiator;
@@ -36,7 +56,7 @@ if (!room) {
  ****************************************************************************/
 
 // Connect to the signaling server
-var socket = io.connect('https://140.114.77.126:8080/');
+var socket = io.connect(server);
 
 socket.on('ipaddr', function (ipaddr) {
     console.log('Server IP address is: ' + ipaddr);
@@ -46,13 +66,13 @@ socket.on('ipaddr', function (ipaddr) {
 socket.on('created', function (room, clientId) {
   console.log('Created room', room, '- my client ID is', clientId);
   isInitiator = true;
-  grabWebCamVideo();
+ // grabWebCamVideo();
 });
 
 socket.on('joined', function (room, clientId) {
   console.log('This peer has joined room', room, 'with client ID', clientId);
   isInitiator = false;
-  grabWebCamVideo();
+ // grabWebCamVideo();
 });
 
 socket.on('full', function (room) {
@@ -62,7 +82,7 @@ socket.on('full', function (room) {
 });
 
 socket.on('ready', function () {
-    createPeerConnection(isInitiator, configuration);
+    createPeerConnection(isInitiator, configuration, photo);
 })
 
 socket.on('log', function (array) {
@@ -74,10 +94,7 @@ socket.on('message', function (message){
     signalingMessageCallback(message);
 });
 
-// Join a room
-socket.emit('create or join', room);
-console.log('create or join'+ room);
-if (location.hostname.match(/140\.114\.77\.126/)) {
+if (location.hostname == serverIP) {
     socket.emit('ipaddr');
 }
 
@@ -106,16 +123,24 @@ function updateRoomURL(ipaddr) {
 /**************************************************************************** 
  * User media (webcam) 
  ****************************************************************************/
+function start() {
+  trace("Requesting local stream");
+  startButton.disabled = true;
+  snapBtn.disabled = false;
 
-function grabWebCamVideo() {
-    console.log('Getting user media (video) ...');
-    getUserMedia({video: true}, getMediaSuccessCallback, getMediaErrorCallback);
+  getUserMedia({audio:true, video:true}, getMediaSuccessCallback, getMediaErrorCallback);
 }
 
+// function grabWebCamVideo() {
+//     console.log('Getting user media (video) ...');
+//     getUserMedia({video: true}, getMediaSuccessCallback, getMediaErrorCallback);
+// }
+
 function getMediaSuccessCallback(stream) {
+    callButton.disabled = false;
     var streamURL = window.URL.createObjectURL(stream);
     console.log('getUserMedia video stream URL:', streamURL);
-    window.stream = stream; // stream available to console
+    localStream = stream; // stream available to console
 
     video.src = streamURL;
     show(snapBtn);
@@ -132,6 +157,23 @@ function getMediaErrorCallback(error){
 
 var peerConn;
 var dataChannel;
+
+function call() {
+  callButton.disabled = true;
+  hangupButton.disabled = false;
+  snapAndSendBtn.disabled = false;
+  trace("Starting call");
+
+    // Join a room
+    socket.emit('create or join', room);
+
+  if (localStream.getVideoTracks().length > 0) {
+    trace('Using video device: ' + localStream.getVideoTracks()[0].label);
+  }
+  if (localStream.getAudioTracks().length > 0) {
+    trace('Using audio device: ' + localStream.getAudioTracks()[0].label);
+  }
+}
 
 function signalingMessageCallback(message) {
     if (message.type === 'offer') {
@@ -151,9 +193,13 @@ function signalingMessageCallback(message) {
     }
 }
 
-function createPeerConnection(isInitiator, config) {
+function createPeerConnection(isInitiator, config, channel) {
     console.log('Creating Peer connection as initiator?', isInitiator, 'config:', config);
     peerConn = new RTCPeerConnection(config);
+    /********************************************/
+        peerConn.addStream(localStream); 
+        trace("Added localStream to PeerConnection");
+    /********************************************/
 
     // send any ice candidates to the other peer
     peerConn.onicecandidate = function (event) {
@@ -169,6 +215,10 @@ function createPeerConnection(isInitiator, config) {
             console.log('End of candidates.');
         }
     };
+    peerConn.onaddstream = function (event){
+      remoteVideo.src = URL.createObjectURL(event.stream);
+      trace("Received remote stream");
+    }
 
     if (isInitiator) {
         console.log('Creating Data Channel');
@@ -204,6 +254,13 @@ function onDataChannelCreated(channel) {
     channel.onmessage = (webrtcDetectedBrowser == 'firefox') ? 
         receiveDataFirefoxFactory() :
         receiveDataChromeFactory();
+}
+
+function hangup() {
+  trace("Ending call");
+  peerConn.close();
+  hangupButton.disabled = true;
+  callButton.disabled = false;
 }
 
 function receiveDataChromeFactory() {
@@ -355,4 +412,7 @@ function randomToken() {
 
 function logError(err) {
     console.log(err.toString(), err);
+}
+function trace(text) {
+  console.log((performance.now() / 1000).toFixed(3) + ": " + text);
 }

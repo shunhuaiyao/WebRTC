@@ -1,8 +1,9 @@
  var os = require('os');
  var static = require('node-static');
 // var http = require('http');
- var socketIO = require('socket.io');
+var socketIO = require('socket.io');
 var ip = '140.114.77.126';
+//var ip = '127.0.0.1';
 
  var fileServer = new(static.Server)();
 // var app = http.createServer(function (req, res) {
@@ -59,7 +60,7 @@ io.sockets.on('connection', function (socket){
         var ifaces = os.networkInterfaces();
         for (var dev in ifaces) {
             ifaces[dev].forEach(function (details) {
-                if (details.family=='IPv4' && details.address != '127.0.0.1') {
+                if (details.family=='IPv4' ) {
                     socket.emit('ipaddr', details.address);
                 }
           });
