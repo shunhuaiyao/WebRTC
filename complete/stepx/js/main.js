@@ -36,7 +36,7 @@ if (!room) {
  ****************************************************************************/
 
 // Connect to the signaling server
-var socket = io.connect();
+var socket = io.connect('https://140.114.77.126:8080/');
 
 socket.on('ipaddr', function (ipaddr) {
     console.log('Server IP address is: ' + ipaddr);
@@ -76,8 +76,8 @@ socket.on('message', function (message){
 
 // Join a room
 socket.emit('create or join', room);
-
-if (location.hostname.match(/localhost|127\.0\.0/)) {
+console.log('create or join'+ room);
+if (location.hostname.match(/140\.114\.77\.126/)) {
     socket.emit('ipaddr');
 }
 
@@ -97,7 +97,7 @@ function updateRoomURL(ipaddr) {
     if (!ipaddr) {
         url = location.href
     } else {
-        url = location.protocol + '//' + ipaddr + ':2013/#' + room
+        url = location.protocol + '//' + ipaddr + ':8080/#' + room
     }
     roomURL.innerHTML = url;
 }

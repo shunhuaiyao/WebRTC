@@ -1,12 +1,23 @@
-var os = require('os');
-var static = require('node-static');
-var http = require('http');
-var socketIO = require('socket.io');
+ var os = require('os');
+ var static = require('node-static');
+// var http = require('http');
+ var socketIO = require('socket.io');
+var ip = '140.114.77.126';
 
-var fileServer = new(static.Server)();
-var app = http.createServer(function (req, res) {
-  fileServer.serve(req, res);
-}).listen(2013);
+ var fileServer = new(static.Server)();
+// var app = http.createServer(function (req, res) {
+  // fileServer.serve(req, res);
+// }).listen(2013);
+const https = require('https');
+const fs = require('fs');
+
+var options = {
+    key: fs.readFileSync('ssl/webRTCKey.pem'),
+    cert: fs.readFileSync('ssl/webRTCcert.pem')
+};
+var app = https.createServer(options,(req,res) =>{
+	fileServer.serve(req, res);
+}).listen(8080,ip);
 
 var io = socketIO.listen(app);
 io.sockets.on('connection', function (socket){
